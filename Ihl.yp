@@ -1,0 +1,282 @@
+%{
+
+
+use Rtactions ;
+use Ihlc ;
+use strict ;
+use 5.012; 
+
+my %varspace;
+
+$varspace{'end_status'} =0 ;
+
+my @stackarg ;
+my @stackexp ;
+
+$varspace{'debug'} = 0 ;
+
+sub dbg {
+	if($varspace{'debug'} == 1)  { 
+	 print "DEBUG IHL :" ;
+	for (my $i =0 ; $i!= @_ ; $i++) { print "$_[$i] " ; }
+	print "\n" ;
+	return 1 ;
+	}
+}
+
+sub setvar{
+	my $var=$_[1] ;
+	my $value=$_[2] ;
+	$varspace{$var}= $value ;
+	dbg( "llamada a setvar, variable $var , valor $value") ;
+	}
+
+sub getvar{
+	my $var=$_[1] ;
+	dbg ("get var de $var, return value is $varspace{$var}") ;
+	return ($varspace{$var}) ;
+	}
+
+%}
+
+%start root 
+
+%token IF
+%token THEN
+%token ELSE
+
+%token BK_BEGIN
+%token BK_END
+
+#%token TAKE 
+#%token UNTAKE 
+#%token REJECT 
+#%token END_ACTIONS 
+#%token NEXT_ACTION 
+
+%token NAME
+%token NUMBER
+%token STRING
+
+%token ASSIGN
+%token PERIOD 
+%token COMMA
+%token OPENPAR
+%token CLOSEPAR
+
+
+%token EQUAL
+%token NOTEQ
+
+#%left '-' '+'
+#%left '*' '/'
+#%nonassoc UMINUS
+
+%%
+
+root:  statement_list  {dbg ("Semantic Tree build !!" ) ;  execute ($_[1] )  ; }
+	;
+
+statement_list: statement PERIOD   { dbg("Ejecución de linea simple: $_[1]") ; 
+				return ( $_[1]  ) ; 
+					 }
+        | statement_list statement PERIOD { dbg("ejecución de linea compuesta: $_[1]") ; 
+        			return (['STATEMENT_LIST' , $_[1] , $_[2] ] ) ; 
+				}
+	;
+
+
+
+statement:	procedure_call { return ($_[1]  ) ; }
+	|	asignation  { return ( $_[1] ) ; }
+	| 	conditional { return ( $_[1] ) ; }
+	;
+	
+
+conditional:	IF condition THEN BK_BEGIN statement_list BK_END ELSE BK_BEGIN statement_list BK_END {
+			dbg ("Se llega a evaluar correctamente el arbol de una condicional!!!") ; 
+			return ( ['FULL_CONDITION', $_[2] , $_[5] , $_[9] ] ) ; } 
+	|	IF condition THEN BK_BEGIN statement_list BK_END {
+			return (['SINGLE_CONDITION' , $_[2], $_[5] ] ) ; }
+	;
+		
+asignation:	VAR ASSIGN expression { dbg("Asignacion $_[1] = $_[3]") ; return (['ASSIGN', $_[1] , $_[3] ] ) ;  } 
+	;
+ 
+expression:  NUMBER  { return  (['NUMBER', $_[1] ] ) ; }  
+	| OPENPAR expression CLOSEPAR { return ( ['EXPRESSION' , $_[2] ] ) ; } 
+	| VAR {   return (['VAR' , $_[1] ] ) ;  } 
+	| STRING   { return (['STRING' , $_[1] ]) ; } 
+	| function { return (['FUNCTION_CALL', $_[1] ] ) ; }
+	;
+
+function:  NAME OPENPAR value_list CLOSEPAR  {	return (['FUNCTION', $_[1] , $_[3] ] )} 
+	;
+
+value_list: expression  { dbg("expresión de value list simple/ultima valor:$_[1]") ; return (['VALUE_LIST_SIMPLE', $_[1] ]); }
+	| expression COMMA value_list  { return (['VALUE_LIST_COMPUESTA', $_[1], $_[3]] ) ; }
+	;
+
+procedure_call:
+	 NAME	{  return (['PROCEDURE_SIMPLE', $_[1]] ) ; }
+	| NAME  OPENPAR value_list CLOSEPAR   { return (['PROCEDURE_WITH_ARGS',$_[1], $_[3] ] ) ; }
+	;
+
+
+condition: OPENPAR expression EQUAL expression CLOSEPAR  { return (['CONDITION_EQ', $_[2] , $_[4] ] ) ; }
+	|  OPENPAR expression NOTEQ expression CLOSEPAR  { return (['CONDITION_NE', $_[2] , $_[4] ] ) ; }
+	;
+
+%%
+
+## Analizador lexico
+
+sub ihllex {
+
+        $_[0]->YYData->{DATA} =~ s/^ +//;
+	
+#       print "dolar cero vale $_[0]->YYData->{DATA}\n" ;
+        return ('',undef) unless (length $_[0]->YYData->{DATA}) ;
+
+#	$_[0]->YYData->{DATA} =~ s/(^\s*take\s*)// and return ("TAKE",'TAKE' ) ;
+#	$_[0]->YYData->{DATA} =~ s/^\s*untake\s*// and return ("UNTAKE",'UNTAKE') ;
+#	$_[0]->YYData->{DATA} =~ s/^\s*reject\s*// and return ("REJECT",'REJECT') ;
+#	$_[0]->YYData->{DATA} =~ s/^\s*end_actions\s*// and return ("END_ACTIONS",'END_ACTIONS') ;
+#	$_[0]->YYData->{DATA} =~ s/^\s*next_action\s*// and return ("NEXT_ACTION",'NEXT_ACTION') ;
+#	
+	$_[0]->YYData->{DATA} =~ s/^\s*==\s*// and return ("EQUAL",'') ;
+	$_[0]->YYData->{DATA} =~ s/^\s*\!=\s*// and return ("NOTEQ",'') ;
+
+	$_[0]->YYData->{DATA} =~ s/^\s*=\s*// and return ("ASSIGN",'') ;
+	$_[0]->YYData->{DATA} =~ s/^\s*\(\s*// and return ("OPENPAR",'') ;
+	$_[0]->YYData->{DATA} =~ s/^\s*\)\s*// and return ("CLOSEPAR",'') ;
+	$_[0]->YYData->{DATA} =~ s/^\s*,\s*//	and return ("COMMA",'') ;
+	$_[0]->YYData->{DATA} =~ s/^\s*;\s*// and return ("PERIOD",'') ;
+
+	$_[0]->YYData->{DATA} =~ s/^\s*if\s*// and return ("IF",'') ;
+	$_[0]->YYData->{DATA} =~ s/^\s*then\s*// and return("THEN",'') ;
+	$_[0]->YYData->{DATA} =~ s/^\s*else\s*// and return("ELSE",'') ;
+	$_[0]->YYData->{DATA} =~ s/^\s*\{\s*//	and return("BK_BEGIN",'') ;
+	$_[0]->YYData->{DATA} =~ s/^\s*\}\s*//	and return("BK_END",'') ;
+
+	
+#	$_[0]->YYData->{DATA} =~ s/^\s*\$(\w+)//  and dbg( "LEX : VAR $1" )  and return ("VAR", $1);
+#	$_[0]->YYData->{DATA} =~ s/^\s*(\d+)\s*// and dbg("LEX:  NUMBER $1") and return('NUMBER',$1) ; 
+#       $_[0]->YYData->{DATA} =~ s/^\s*(\w+)\s*//    and dbg("LEX NAME  $1") and return ("NAME",$1);
+#	$_[0]->YYData->{DATA} =~ s/^\s*"(.*?)"\s*// and dbg( "LEX STRING $1") and return ("STRING", $1) ; 
+
+
+	$_[0]->YYData->{DATA} =~ s/^\s*\$(\w+)//  and return ("VAR", $1);
+	$_[0]->YYData->{DATA} =~ s/^\s*(\d+)\s*// and return('NUMBER',$1) ; 
+        $_[0]->YYData->{DATA} =~ s/^\s*(\w+)\s*//  and return ("NAME",$1);
+	$_[0]->YYData->{DATA} =~ s/^\s*"(.*?)"\s*//  and return ("STRING", $1) ; 
+
+
+}
+
+
+### Main Function execute 
+## This is the Syntax tree "parser" and execution
+
+sub execute {
+	my $ra = $_[0] ;
+
+	my $token = $$ra[0]  ;
+#	print "Token es $token\n" ; 
+
+	given ($token) {
+
+	when ('STATEMENT_LIST') { execute ($$ra[1] ) ;  execute ($$ra[2]) ;  } 
+	when ('STATEMENT') { execute ($$ra[1] ) ; }
+	when ('ASSIGN')  { 
+			my $var=$$ra[1] ;
+			my $ret= evaluate ($$ra[2] ) ; 
+			# Codigo de asignacion
+#			print "Asignacion de $var valor $ret\n" ;
+			$varspace{$var} = $ret ;
+			}
+
+	when ('PROCEDURE_WITH_ARGS') {
+			my $proc=$$ra[1] ;
+			my $cmd ;
+#			print "Seria la ejecucion del procedure $proc\n" ;
+			if (($cmd = Ihlc::lookup_proc($proc)) !=0 ) {
+#                        dbg("a ejecutar comando $proc con argumentos") ;
+			my @args = make_params ($$ra[2] ) ;
+		#	print "Dump de parametros !!\n" ;
+		#	for (my $i=0 ; $i!= @args ; $i ++) { print "array $i valor $args[$i]\n" ; }	
+                         $cmd->(\%varspace, @args) ; }
+                else { dbg("procedure $cmd no existe") ; }
+			 }
+	when ('FULL_CONDITION') {
+#			print "Ejecucion de la condicion \n" ;
+			if (evaluate_cond ($$ra[1] )) {  execute ($$ra[2]) ; } 
+			else { execute ($$ra[3])  ; }
+			}
+	when ('SINGLE_CONDITION') {
+			if (evaluate_cond ($$ra[1] )) { execute ($$ra[2] ) ; } }
+	when ('PROCEDURE_SIMPLE') {
+			my $proc= $$ra[1] ; 
+#			print "Ejecucion del procedure $proc simple \n" ; 
+			my $cmd ;
+			if (($cmd = Ihlc::lookup_proc($proc)) !=0 ) {
+                        dbg("a ejecutar comando $proc con argumentos") ;
+                         $cmd->(\%varspace) ; }
+			   else { dbg("procedure $cmd no existe") ; }
+			}
+	}
+}
+
+sub make_params {
+	my $ra =$_[0] ;
+	given ($$ra[0] ) {
+	when ('VALUE_LIST_SIMPLE') {   return evaluate ($$ra[1] ) ; } 
+	when ('VALUE_LIST_COMPUESTA') {
+			return ( evaluate ($$ra[1]), make_params ($$ra[2])  ) ; 
+					}
+	}
+}
+
+sub evaluate_function {
+	my $name= $_[0] ;
+	my $ra= $_[1] ; 
+
+	my $proc ; my $ret =0 ;
+        if (($proc = Ihlc::lookup_func($name)) !=0 ) {
+                                dbg("Existe la función $name  valor $proc argumentos " . @stackexp) ;
+                                dbg ("current ticket is $varspace{'current'} ") ;
+                                 $ret= $proc->(\%varspace, @stackexp) ; @stackexp=() ; }
+                        else { dbg ("No existe la función $_[1]") ; }
+	}
+
+sub evaluate {
+	my $ra= $_[0] ; 
+	given ($$ra[0] ){
+	when ('NUMBER') { return $$ra[1] ; } 
+	when ('VAR') 	{ return ( $varspace{$$ra[1]}) ; }
+	when ('STRING')	{ return ( $$ra[1] ) ; } 
+	when ('FUNCION_CALL') { return (evaluate_function ($$ra[1] , $$ra[2]) );  } 
+	}
+}
+
+sub evaluate_cond {
+	my $ra= $_[0] ;
+	my ($left , $right) ;
+	given ($$ra[0] ) {
+	when ('CONDITION_EQ' ) {
+		$left= evaluate ($$ra[1] ) ; 
+		$right= evaluate ($$ra[2] ) ;
+		if ($left == $right ) {  return 1 ; } else { return (0) ; }
+		}
+	when ('CONDITION_NE' ) {
+		$left= evaluate ($$ra[1] ) ;
+		$right=evaluate ($$ra[2] ) ;
+		if ($left != $right) { return 1 ; } else { return (0) ; }
+			}
+	}
+		
+		
+}
+
+
+

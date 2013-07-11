@@ -1,0 +1,28 @@
+
+## Rule Language.
+
+This is the core specification of the Incident Report Handling, and it's used inside the rules.xml file, the main idea of LV0 is to process the incident Report queue
+and automatize some aspects, this is the most important (and not developed) part of the tools, as this should be a rich language and currenty it's only a very basic 
+schema.
+
+Current commands:
+
+take --> take the ticket
+next_action -> finish the processing of the rule, continue
+reject--> reject the ticket
+end_actions -> finish the processing of the rule, dont' process more rules
+
+
+
+
+cmd.yp --> external parser
+	--> use Actions: for implementing low level access to RTIR
+		-->use the RT::Client::REST
+
+	--> command process 
+			--> Loop as other commands
+			--> for all the tickets
+				--> process_ticket (RT)
+			-	-->process ticket ---> parser the rule
+				-->IHL
+			

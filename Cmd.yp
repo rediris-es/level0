@@ -1,0 +1,155 @@
+
+%{ my %symtab; %}
+
+%token CODIGO
+%token VAR
+%token TAKE
+%token ALL
+%right MINUS 
+%token PROCESS
+%token QUIT
+%token LIST
+%token INFO
+%token SET
+%token DETAIL
+%token ASSIGN
+%token HELP
+%token UNTAKE 
+%token REJECT
+%token VALUE
+%token IHL
+
+%token RULES
+%token LOAD
+%token SHOW
+
+%right WHITE
+
+
+%{
+
+use Actions ;
+use Help ;
+
+my $argument;
+my $start ; 
+my $end ;
+my $stype ;
+
+%}
+
+
+%%
+
+comand :  take_command  
+	| quit_command 
+	| process_command
+	| info_command 
+	| list_command  
+	| set_command
+	| untake_command
+	| reject_command
+	| help_command
+	| url_command
+	| search_command
+	| rules_command
+	;
+
+take_command: TAKE lista {  Actions::take ('list',$argument) ;  $argument="" ; }
+	| TAKE rango 	{ Actions::take ('range',$start,$end) ; }
+	| TAKE ALL	{ Actions::take ('all'); }
+	;
+
+untake_command: UNTAKE lista { Actions::untake ('list',$argument) ; $argument="" ; }
+	| UNTAKE rango { Actions::untake ('range',$start,$end) ; }
+	| UNTAKE ALL   { Actions::untake ('all') ; }
+	;
+reject_command:	REJECT lista { Actions::reject ('list',$argument) ; $argument="" ; }
+	| REJECT rango { Actions::reject ('range',$start,$end) ; }
+	| REJECT ALL	{ Actions::reject ('all') ; }
+	;
+
+url_command: URL lista { Actions::url ('list',$argument) ; $argument="" ; }
+	| URL rango    { Actions::url ('range',$start,$end) ; }
+	| URL ALL      { Actions::url ('all') ; }
+	;
+search_command: SEARCH STYPE VALUE { Actions::search($stype, $_[3]) ; $stype="" ; }
+	;
+
+quit_command:	QUIT  {  $::fin=1 ; }
+	;
+help_command:	HELP { Help::help(''); }
+	| HELP token  { Help::help($_[2]) ; }
+	;
+process_command: PROCESS lista { Actions::process ('list',$argument) ; $argument ="" ; }
+	| PROCESS range	{ Actions::process ('range',$start,$end) ; }
+	| PROCESS ALL	{ Actions::process ('all') ; }
+	;
+
+info_command: INFO  CODIGO	{  Actions::info($_[2] , '') ; }
+	| INFO CODIGO DETAIL	{  Actions::info($_[2], 'detail') ;}
+	;
+
+list_command:	LIST 		{ Actions::list ; }
+
+	;
+
+rules_command: RULES LOAD { Actions::load_rules ; }
+	| RULES LIST	{ Actions::print_rules ; }
+	| RULES SHOW CODIGO	{ print "codigo vale $_[3]\n" ; Actions::show_rule $_[3] ; }
+	;
+
+set_command:	SET WHITE  VAR WHITE ASSIGN WHITE VALUE	{ print "set \n" ;}
+
+	;
+
+rango:	CODIGO MINUS CODIGO { $start=$_[1] ; $end=$_[3] ;}
+   	;
+
+lista:	CODIGO	{  $argument .=" $_[1] " ; }
+	| CODIGO lista  {  $argument .=" $_[1] " ;}
+	;
+
+token:	TAKE | UNTAKE | LIST | PROCESS | INFO | REJECT | URL  | IHL
+	;
+%%
+
+sub cmdlex {
+
+#        $_[0]->YYData->{DATA} =~ s/^ +//;
+#	print "dolar cero vale $_[0]->YYData->{DATA}\n" ;	
+        return ('',undef) unless (length $_[0]->YYData->{DATA}) ;
+
+
+	$_[0]->YYData->{DATA} =~ s/(^\s*take\s*)// and return ("TAKE",'TAKE' ) ;
+	$_[0]->YYData->{DATA} =~ s/^\s*untake\s*// and return ("UNTAKE",'UNTAKE') ;
+	$_[0]->YYData->{DATA} =~ s/^\s*reject\s*// and return ("REJECT",'REJECT') ;
+	$_[0]->YYData->{DATA} =~ s/^\s*url\s*//    and return ("URL","URL") ;
+
+	$_[0]->YYData->{DATA} =~ s/(^\s*all\s*)//  and return ("ALL",'') ;
+	$_[0]->YYData->{DATA} =~ s/^(\s*-\s*)//    and return ("MINUS",'') ;
+	$_[0]->YYData->{DATA} =~ s/^(\s*process\s*)// and  return ("PROCESS",'') ;
+	$_[0]->YYData->{DATA} =~ s/^quit\s*// and  return ("QUIT", '') ; 
+	$_[0]->YYData->{DATA} =~ s/^list\s*//  and return ("LIST",'LIST') ;
+	$_[0]->YYData->{DATA} =~ s/^(\s*info\s*)// and return ("INFO",'INFO') ;
+	$_[0]->YYData->{DATA} =~ s/^(\s*detail\s*)//  and return ("DETAIL",'') ;
+	$_[0]->YYData->{DATA} =~ s/^(\s*rules\s*)// and return ('RULES','') ;
+	$_[0]->YYData->{DATA} =~ s/^(\s*load\s*)//  and return ('LOAD','') ;
+	$_[0]->YYData->{DATA} =~ s/^(\s*show\s*)//  and return ('SHOW','') ;
+	$_[0]->YYData->{DATA} =~ s/^(\s*ihl\s*)//  and return ('IHL','') ;
+
+
+	$_[0]->YYData->{DATA} =~ s/set// and return ("SET", $1) ;
+	$_[0]->YYData->{DATA} =~ s/ASSIGN// and return ("ASSIGN", $1);
+	# Mierda de parser
+	$_[0]->YYData->{DATA} =~ s/^\s*(\d+)\s*// and return ("CODIGO", $1);
+#	$_[0]->YYData->{DATA} =~ s/\n// and return ($1,$1) ;	
+	$_[0]->YYData->{DATA} =~ s/^\s*help\s*// and return ("HELP",'') ;
+
+        $_[0]->YYData->{DATA} =~ s/^\$(\w+)//  and print "found var $1\n"   and return ("VAR", $1);
+	$_[0]->YYData->{DATA} =~ s/^(\w+)//    and print "Found VALUE $1\n" and return ("VALUE",$1);
+	$_[0]->YYData->{DATA} =~ s/^\s++// and  return ("WHITE", '') ;
+
+        die "Unknown token (".$_[0]->YYData->{DATA}.")\n";
+    }
+

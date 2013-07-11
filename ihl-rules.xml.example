@@ -1,0 +1,40 @@
+<rules>
+	<rule>
+	<name>take</name>
+	<description>Take the incident</description>
+	<condition>
+	allways 
+	</condition>
+	<actions>
+		take;
+		next_action;
+	</actions>
+	</rule>	
+<rule>
+	<name>AddIP_AOL</name>
+	<description>Add IP address from an ARF email from AOL</description>
+	<condition>
+	( #FROM =~ /scomp\@aol.net/ )  && ( #SUBJECT =~ /Email Feedback Report for/) 
+	</condition>
+	<actions>
+		$subject=getfromticket("Subject") ;
+		$ip = ipfromstring($subject)  ;
+		ticket_add($current,"ip","append",$ip) ;
+		reject ;
+		end_actions ;
+	</actions>
+</rule>
+
+<rule>
+	<name>Summary from spamcop</name>
+	<description>Report without information about spam from spamcop</description>
+	<condition> (#FROM =~ /summaries\@admin.spamcop.net/ ) && ( #SUBJECT =~ /\[SpamCop\] Alert/ ) </condition>
+	<actions> 
+		reject  ;
+		end_actions ;
+	</actions>
+</rule>
+
+
+</rules>
+			
